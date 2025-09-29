@@ -53,20 +53,20 @@ jobs:
         cd ..
         
           # 配置内核选项
-        echo "CONFIG_MODULE_SIG=n" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_MODULE_SIG_ALL=n" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_MODULES=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_KERNELSU_DEBUG=n" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_KSU=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_KSU_TRACEPOINT_HOOK=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_MODULE_SIG=n" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_MODULE_SIG_ALL=n" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_MODULES=y" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_KERNELSU_DEBUG=n" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_KSU=y" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_KSU_TRACEPOINT_HOOK=y" >> ./arch/arm64/configs/sdm845_defconfig
 
-        echo "CONFIG_KPROBES=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_HAVE_KPROBES=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
-        echo "CONFIG_KPROBE_EVENTS=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_KPROBES=y" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_HAVE_KPROBES=y" >> ./arch/arm64/configs/sdm845_defconfig
+        echo "CONFIG_KPROBE_EVENTS=y" >> ./arch/arm64/configs/sdm845_defconfig
         sed -i '/atomic_set(&current->seccomp.filter_count, 0);/d' drivers/kernelsu/core_hook.c
         
         # 启用必要的内核配置
-        #CONFIG_FILE="arch/arm64/configs/sdm845-perf_defconfig"
+        #CONFIG_FILE="arch/arm64/configs/sdm845_defconfig"
         #echo "CONFIG_MODULE_SIG=n" >> $CONFIG_FILE
         #echo "CONFIG_MODULE_SIG_ALL=n" >> $CONFIG_FILE
         #echo "CONFIG_MODULES=y" >> $CONFIG_FILE
@@ -92,7 +92,7 @@ jobs:
         export KBUILD_BUILD_USER=ShirokoNeko-KSU
         
         # 编译配置
-        make -s -j$(nproc --all) O=out ARCH=arm64 sdm845-perf_defconfig
+        make -s -j$(nproc --all) O=out ARCH=arm64 sdm845_defconfig
         
         # 编译内核并记录日志
         make -j$(($(nproc --all)-1)) \

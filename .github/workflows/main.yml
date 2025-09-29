@@ -1,0 +1,130 @@
+name: 编译 sdm845 安卓U 内核
+
+on:
+  workflow_dispatch:
+    inputs:
+      device:
+        type: choice           
+jobs:
+  build:
+
+    runs-on: ubuntu-22.04
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: 构建编译内核环境
+      run: |
+        sudo apt-get update
+        sudo -E apt-get -y -qq install git make bc bison ccache openssl dos2unix zip kmod cpio flex libelf-dev curl libssl-dev libtfm-dev wget device-tree-compiler ca-certificates python3 python2 libtinfo5 binutils-aarch64-linux-gnu binutils-arm-linux-gnueabi
+        mkdir -p $GITHUB_WORKSPACE/kernel_workspace
+    - name: 下载 Gcc编译器
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        
+        mkdir gcc64
+        wget -O gcc-aarch64.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/aarch64/aarch64-linux-android-4.9/+archive/961622e926a1b21382dba4dd9fe0e5fb3ee5ab7c.tar.gz
+        tar -C gcc64/ -zxvf gcc-aarch64.tar.gz
+    
+        mkdir gcc32
+        wget -O gcc-arm.tar.gz https://android.googlesource.com/platform/prebuilts/gcc/linux-x86/arm/arm-linux-androideabi-4.9/+archive/cb7b3ac1b7fdb49474ff68761909934d1142f594.tar.gz
+        tar -C gcc32/ -zxvf gcc-arm.tar.gz
+    
+    - name: 下载Clang编译器
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        mkdir clang-aosp
+        git clone -q --depth=1 https://github.com/wu17481748/android_prebuilts_clang_host_linux-x86_clang-4691093 clang-aosp
+    
+    - name: 下载内核源码
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace
+        git clone --depth=1 https://github.com/Winkmoon/android_kernel_lg_sdm845.git -b U android-kernel
+        cd android-kernel
+    - name: 集成 KernelSU
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        rm -rf KernelSU
+        curl -LSs "https://raw.githubusercontent.com/Winkmoon/KernelSU-Next/next/kernel/setup.sh" | bash -s next
+        cd KernelSU-Next
+        KSU_VERSION=$(expr $(/usr/bin/git rev-list --count HEAD) "+" 10200)
+        echo "KSUVER=$KSU_VERSION" >> $GITHUB_ENV
+        sed -i "s/DKSU_VERSION=16/DKSU_VERSION=${KSU_VERSION}/" kernel/Makefile
+        cd ..
+        
+          # 配置内核选项
+        echo "CONFIG_MODULE_SIG=n" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_MODULE_SIG_ALL=n" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_MODULES=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_KERNELSU_DEBUG=n" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_KSU=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_KSU_TRACEPOINT_HOOK=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+
+        echo "CONFIG_KPROBES=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_HAVE_KPROBES=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        echo "CONFIG_KPROBE_EVENTS=y" >> ./arch/arm64/configs/sdm845-perf_defconfig
+        sed -i '/atomic_set(&current->seccomp.filter_count, 0);/d' drivers/kernelsu/core_hook.c
+        
+        # 启用必要的内核配置
+        #CONFIG_FILE="arch/arm64/configs/sdm845-perf_defconfig"
+        #echo "CONFIG_MODULE_SIG=n" >> $CONFIG_FILE
+        #echo "CONFIG_MODULE_SIG_ALL=n" >> $CONFIG_FILE
+        #echo "CONFIG_MODULES=y" >> $CONFIG_FILE
+        #echo "CONFIG_OVERLAY_FS=y" >> $CONFIG_FILE
+        #echo "CONFIG_KSU=y" >> $CONFIG_FILE
+               
+    - name: 设置ccache缓存
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: build-kernel-mido-kernel
+        max-size: 8G
+
+    - name: 切换python2.7
+      run: |
+       sudo rm /bin/python
+       sudo ln -s /bin/python2.7 /bin/python
+ 
+    - name: 开始编译内核
+      run: |
+        cd $GITHUB_WORKSPACE/kernel_workspace/android-kernel
+        export PATH=$GITHUB_WORKSPACE/kernel_workspace/clang-aosp/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc64/bin:$GITHUB_WORKSPACE/kernel_workspace/gcc32/bin:$PATH
+        export KBUILD_BUILD_HOST=Xinran_StarBai
+        export KBUILD_BUILD_USER=ShirokoNeko-KSU
+        
+        # 编译配置
+        make -s -j$(nproc --all) O=out ARCH=arm64 sdm845-perf_defconfig
+        
+        # 编译内核并记录日志
+        make -j$(($(nproc --all)-1)) \
+         CC="ccache clang" \
+         O=out \
+         ARCH=arm64 \
+         CLANG_TRIPLE=aarch64-linux-gnu- \
+         CROSS_COMPILE=aarch64-linux-android- \
+         CROSS_COMPILE_ARM32=arm-linux-androideabi- \
+         V=1 \
+         KCFLAGS="-fno-pie"
+         
+    - name: 验证内核镜像
+      run: |
+        FILE_PATH="$GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot/Image.gz-dtb"
+        if [ -f "$FILE_PATH" ]; then
+        echo "内核镜像存在，大小: $(du -h $FILE_PATH | cut -f1)"
+        else
+        echo "错误：内核镜像未生成!"
+        ls -la "$GITHUB_WORKSPACE/kernel_workspace/android-kernel/out/arch/arm64/boot"
+        exit 1
+        fi
+        
+    - name: 上传内核镜像
+      uses: actions/upload-artifact@v4
+      with:
+        name: kernel-sdm845-ksu
+        path: kernel_workspace/android-kernel/out/arch/arm64/boot/Image.gz-dtb
+        
+    - name: 上传编译日志（如果失败）
+      if: ${{ failure() }}
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-log-${{ github.event.inputs.device }}
+        path: $GITHUB_WORKSPACE/kernel_workspace/android-kernel/build.log

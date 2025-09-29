@@ -39,7 +39,7 @@ jobs:
     - name: 下载内核源码
       run: |
         cd $GITHUB_WORKSPACE/kernel_workspace
-        git clone --depth=1 https://github.com/Winkmoon/android_kernel_lg_sdm845.git -b U android-kernel
+        git clone --depth=1 https://github.com/sebasrock156/android_kernel_lge_sdm845.git -b DotOS android-kernel
         cd android-kernel
     - name: 集成 KernelSU
       run: |
